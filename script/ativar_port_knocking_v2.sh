@@ -73,6 +73,60 @@ total_args=("$@")  # colocar $total_args toda vez que chamar a funcao verifiy_ex
 contador=0
 MODO_SLEEP=false
 
+
+# funcao que faz o portknocking em um range de rede completo 
+# pra cada host (255) vai ser feito um loop e em cada loop e feito o processo de mandar instantaneamente as portas e dpois fazer o teste e ver a saida 
+# podemos ater criar uma lista de ips com referencia dizendo quem ta e quem nao ta infectado 
+portknocking_networking_full () {
+
+    Rede=$(echo $1 | sed "s/\./ /3" | cut -d " " -f 1)
+
+    local seq_ports=("$@") 
+
+    echo 
+    echo -e "${RED}╔═══════════════════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${RED}║     INICIANDO TESTE DE DETECCAO DE MALWARE EM TODA A REDE $Rede.0/255 ${RED}     ║${NC}"
+    echo -e "${RED}╚═══════════════════════════════════════════════════════════════════════════════╝${NC}"
+    echo
+    sleep 2
+    clear
+
+    for host in $(seq 1 256 ); do 
+
+        echo 
+        echo -e "${RED}╔═══════════════════════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${RED}║           INICIANDO TESTE DE LISTENER NO HOST -> ${GREEN} $Rede.$host${NC}                ${RED}  ║${NC}"
+        echo -e "${RED}╚═══════════════════════════════════════════════════════════════════════════════╝${NC}"
+        echo
+
+        echo -e "${RED} - host [$Rede.$host] batendo na porta [ ${seq_ports[1]} ] ${NC}"
+        echo -e "${RED} - host [$Rede.$host] batendo na porta [ ${seq_ports[2]} ] ${NC}"
+        echo -e "${RED} - host [$Rede.$host] batendo na porta [ ${seq_ports[3]} ] ${NC}"
+        echo -e "${RED} - host [$Rede.$host] batendo na porta [ ${seq_ports[4]} ]${NC}\n\n"
+
+        sudo hping3 --syn -c 1 -p "${seq_ports[1]}" "$Rede.$host" > /dev/null 2>&1;
+        sudo hping3 --syn -c 1 -p "${seq_ports[2]}" "$Rede.$host" > /dev/null 2>&1; 
+        sudo hping3 --syn -c 1 -p "${seq_ports[3]}" "$Rede.$host" > /dev/null 2>&1; 
+        sudo hping3 --syn -c 1 -p "${seq_ports[4]}" "$Rede.$host" > /dev/null 2>&1
+
+
+        if sudo hping3 -S -p "$listen_port" -c 1 "$Rede.$host" 2>/dev/null | grep -q "flags=SA"; then 
+
+             echo -e "${YELLOW}[+] -  ["$(date +'%H:%M:%S')"]${NC} - ${BLUE}[ACK] ▶ ${NC} ${GREEN}SOCKET : [$Rede.$host:$listen_port] PORTA [ $listen_port ] ESCULTANDO NO HOST  MALWARE DETECTADO  ✔ ${NC}\n"
+
+        else 
+             echo -e "${YELLOW}[+] -  ["$(date +'%H:%M:%S')"]${NC} - ${BLUE}[RSA] ▶ ${NC} ${RED}SOCKET : [$Rede.$host:$listen_port] PORTA [ $listen_port ] NAO RESPONDEU - SEM MALWARE ⓧ ${NC} ${NC}\n"
+
+        fi
+
+    done
+
+}
+
+
+
+
+
 verifiy_execution_args () {
 
     for args in "${@}"; do 
@@ -88,6 +142,28 @@ verifiy_execution_args () {
                  _pingSweep "$IP"
             fi 
         ;;
+
+        # NEWWWWWWWWWWWWWW FEATURE 
+        --scope-full) 
+            echo
+            echo -ne "${GREEN}[+] - VOCE QUER FAZER ESSE TESTE EM UMA REDE COMPLETA ? (S/N): ${NC}"
+            read response_2
+
+            if [[ "$response_2" =~  ^[sS]$ ]]; then 
+                
+                # funcao que vai fazer o processo 
+                echo
+                sleep 1
+                # funcao que vai fazer o teste em toda a Rede 
+                portknocking_networking_full $1 "${port_sequence_active[@]}"
+
+                sleep 2 
+                exit 0
+
+            fi
+
+        ;;
+
         --sleep)   
             MODO_SLEEP=true 
         ;;
@@ -196,7 +272,10 @@ listen_port_socket () {
         ((contador+=1))
         echo -e "${YELLOW}[+] - $contador  ["$(date +'%H:%M:%S')"]${NC} - ${BLUE}[ACK] ▶ ${NC} ${RED}SOCKET : [$IP:$listen_port] ESCULTANDO ✔ ${NC}"
         echo 
+        
+        # -------
         wget -T 1 -t 1 http://"$IP":"$listen_port" -O page_m.html > /dev/null 2>&1
+
         echo -e "${GREEN}[!] - ${RED}PAGINA HTML DO MALWARE SALVA EM : page_m.html  ✔ ${NC}"
         echo 
 
